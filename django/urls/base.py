@@ -3,7 +3,7 @@ from urllib.parse import unquote, urlsplit, urlunsplit
 from asgiref.local import Local
 
 from django.utils.functional import lazy
-from django.utils.translation import override
+from django.utils.translation import override, check_for_language, get_language_from_path
 
 from .exceptions import NoReverseMatch, Resolver404
 from .resolvers import _get_cached_resolver, get_ns_resolver, get_resolver
@@ -166,7 +166,16 @@ def translate_url(url, lang_code):
     parsed = urlsplit(url)
     try:
         # URL may be encoded.
-        match = resolve(unquote(parsed.path))
+        try:
+            match = resolve(unquote(parsed.path))
+        except Resolver404:
+            # URL may be for a language other than the current request language
+            url_lang_code = get_language_from_path(unquote(parsed.path))
+            if url_lang_code and check_for_language(url_lang_code):
+                with override(url_lang_code):
+                    match = resolve(unquote(parsed.path))
+            else:
+                raise
     except Resolver404:
         pass
     else:
